@@ -22,7 +22,11 @@ class Card
   end
 
   def to_s
-    return @rank + " of " + @suit unless is_hidden
+    unless is_hidden
+      return @rank + " of " + @suit
+    else
+      return "Face down card"
+    end
   end
 
 end
