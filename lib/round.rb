@@ -1,121 +1,149 @@
 require_relative 'helper'
 require 'deck'
+require 'player'
 
 class Round
 
-  attr_accessor :bet, :stack, :dealer_hand, :player_hand
-
-  def initialize(deck, stack, number_of_players)
+  def initialize(deck)
     @deck = deck
-    @number_of_players = number_of_players
-    @bet = 10 # default for now
-    puts "==================================="
-    puts "Bet: " + @bet.to_s
-    puts "==================================="
   end
 
-  def deal
-    @players_hands = []
-    @dealers_hand = []
-
-    @number_of_players.times do
-      @players_hands.push([@deck.deal])
+  def deal(number_of_players)
+    @players = []
+    number_of_players.times do
+      @players.push(Player.new)
     end
-    dealer_card = @deck.deal
-    dealer_card.is_hidden = true
-    @dealers_hand.push(dealer_card)
+    @dealer = Player.new
 
-    @players_hands.each do |player|
-      player.push(@deck.deal)
+    @players.each do |player|
+      player.deal_card(@deck)
     end
 
-    @dealers_hand.push(@deck.deal)
+    @dealer.deal_card(@deck)
+    @dealer.hand[0].is_hidden = true
 
-    dealer_up_card = @dealers_hand[1]
-
-    dealer_total = get_total(@dealers_hand)
-
-    puts "Dealer is showing: " + dealer_total.join('/')
-    puts dealer_up_card.to_s
-    puts "----------"
-    @players_hands.each_with_index do |hand, i|
-      i = i + 1
-      total = get_total(hand)
-      puts "Player " + i.to_s + ": " + total.join('/')
-      puts hand
-      puts "----------"
+    @players.each do |player|
+      player.deal_card(@deck)
     end
 
+    @dealer.deal_card(@deck)
 
+    @players.each_with_index do |player, i|
+      puts "Player " + (i + 1).to_s + " has the " + player.hand.join(' and ')
+      #puts "Total: " + get_total(player.hand).join('/')
+      puts "Total: " + player.total.join('/')
+      sleep(0.5)
+    end
+    puts "Dealer is showing the " + @dealer.hand[1].to_s
+    #puts "Dealer has " + get_total(@dealer.hand).join('/')
+    puts "Dealer has " + @dealer.total.join('/')
+    sleep(0.5)
+
+    return @players, @dealer
   end
 
-  def hit(player)
-    card = @deck.deal
-    @players_hands[player].push(card)
-    puts "Player " + (player + 1).to_s + " is dealt the " + card.to_s
+  def player_options
+    @players.each_with_index do |player, i|
+      hit_or_stick(player, i)
+    end
   end
 
-  def stick(player)
-    player = player + 1
-    puts "Player " + player.to_s + " sticks"
+  def hit_or_stick(player, i)
+    option = ''
+    until ['h', 's'].include? option
+      puts "Player " + (i + 1).to_s + ":(" + player.total.join('/') + ") " + "[h]it or [s]tick"
+      option = gets.chomp
+    end
+    if option == 'h'
+      player.deal_card(@deck)
+      puts "Player " + (i + 1).to_s + " is dealt the " + player.hand.last.to_s
+      #total = get_total(player.hand)
+      total = player.total
+      sleep(0.5)
+      puts "Player " + (i + 1).to_s + " has " + total.join('/')
+      sleep(0.5)
+      hit_or_stick(player, i) unless total[0] > 21
+      puts "Player " + (i + 1).to_s + " has busted!" if total[0] > 21
+      sleep(0.5) if total[0] > 21
+    elsif option == 's'
+      #total = get_total(player.hand)
+      total = player.total
+      puts "Player " + (i + 1).to_s + " stands on " + total.last.to_s
+      sleep(0.5)
+    else
+      puts "Invalid option"
+    end
   end
+
 
   def dealer_runout
-    dealer_hidden_card = @dealers_hand[0]
-    dealer_hidden_card.is_hidden = false
-    count = get_total(@dealers_hand)
+    @dealer.hand[0].is_hidden = false
+    puts "Dealer reveals the " + @dealer.hand[0].to_s
+    sleep(0.5)
 
-    puts "Dealer reveals the " + dealer_hidden_card.to_s
-    puts "Dealer has " + count.join('/')
+    #total = get_total(@dealer.hand)
+    @dealer.get_total(@dealer.hand)
+    total = @dealer.total
 
-    until count.any? { |c| c.to_i >=17 }
-      card = @deck.deal
-      @dealers_hand.push(card)
-      puts "Dealer draws the " + card.to_s
-      count = get_total(@dealers_hand)
-      puts "Dealer has " + count.join('/')
-    end
+    puts "Dealer has " + total.join('/')
+    sleep(0.5)
 
-    puts "Dealer busts!" if count[0] > 21
-  end
-
-  private
-
-  def get_total(hand)
-    total = [0]
-    hand.each do |card|
-      unless card.is_hidden
-        if card.value.kind_of?(Array) # if an ace
-          count = total.count
-          count.times do |i|
-            total.push(total[i] + card.value[1])
-          end
-          count.times do |i|
-            total[i] = total[i] + card.value[0]
-          end
-        else
-          total.count.times do |i|
-            total[i] = total[i] + card.value
+    until total.any? { |c| c.to_i >= 17 }
+      @dealer.deal_card(@deck)
+      puts "Dealer draws the " + @dealer.hand.last.to_s
+      #total = get_total(@dealer.hand)
+      total = @dealer.total
+      sleep(0.5)
+      puts "Dealer has " + total.join('/')
+      sleep(0.5)
+      if total == [7, 17] # soft 17
+        @dealer.deal_card(@deck)
+        puts "Dealer draws the " + @dealer.hand.last.to_s
+        total = @dealer.total
+        sleep(0.5)
+        unless total >= 17
+          until total.any? { |c| c.to_i >= 17 }
+            @dealer.deal_card(@deck)
+            puts "Dealer draws the " + @dealer.hand.last.to_s
+            total = @dealer.total
+            sleep(0.5)
           end
         end
       end
     end
-    total.delete_if { |val| val > 21 } unless total.count == 1
-    total.uniq!
-    total.sort_by(&:to_i)
-    return total
+
+    puts "Dealer finishes with " + total.last.to_s
+
+    puts "Dealer busts!" if total[0] > 21
+    sleep(0.5)
   end
 
+
+  def determine_winner
+    #dealer_total = get_total(@dealer.hand).last
+    dealer_total = @dealer.total.last
+    @players.each_with_index do |player, i|
+      #player_total = get_total(player.hand).last
+      player_total = player.total.last
+      if player_total > 21
+        puts "Player " + (i + 1).to_s + " loses!"
+        sleep(0.5)
+      elsif dealer_total > 21
+        puts "Player " + (i + 1).to_s + " wins!"
+        sleep(0.5)
+      elsif player_total > dealer_total
+        puts "Player " + (i + 1).to_s + " wins!"
+        sleep(0.5)
+      elsif player_total == dealer_total
+        puts "Player " + (i + 1).to_s + " push!"
+        sleep(0.5)
+      elsif player_total < dealer_total
+        puts "Player " + (i + 1).to_s + " loses!"
+        sleep(0.5)
+      end
+    end
+  end
+
+
 end
-
-deck = Deck.new(2)
-deck.shuffle
-
-round = Round.new(deck, 100, 2)
-round.deal
-round.hit(0)
-round.stick(0)
-round.stick(1)
-round.dealer_runout
-
 
